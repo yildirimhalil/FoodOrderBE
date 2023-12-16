@@ -1,9 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using FoodOrderBE.Controllers;
 using FoodOrderBE.Models;
-using System.Data.SqlClient;
 
 namespace FoodOrderBE.Controllers
 {
@@ -11,41 +8,52 @@ namespace FoodOrderBE.Controllers
     [ApiController]
     public class FoodsController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
-        public FoodsController(IConfiguration configuration)
+        private readonly DAL _dal;
+
+        public FoodsController(DAL dal)
         {
-            _configuration = configuration;
+            _dal = dal;
         }
 
         [HttpPost]
         [Route("addToCart")]
-        public Response addToCart(Cart cart)
+        public Response AddToCart(Cart cart)
         {
-            DAL dal = new DAL();
-            SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("FoodOrderCS").ToString());
-            Response response = dal.addToCart(cart, connection);
+            Response response = _dal.AddToCart(cart);
             return response;
         }
 
         [HttpPost]
         [Route("placeOrder")]
-        public Response placeOrder(Users users)
+        public Response PlaceOrder(Users user)
         {
-            DAL dal = new DAL();
-            SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("FoodOrderCS").ToString());
-            Response response = dal.placeOrder(users, connection);
+            Response response = _dal.PlaceOrder(user);
             return response;
         }
-        
+
         [HttpPost]
         [Route("orderList")]
-        public Response orderList(Users users)
+        public Response OrderList(Users user)
         {
-            DAL dal = new DAL();
-            SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("FoodOrderCS").ToString());
-            Response response = dal.orderList(users, connection);
+            Response response = _dal.OrderList(user);
             return response;
         }
-        
+
+        [HttpGet]
+        [Route("getFoodDetails/{foodId}")]
+        public Response GetFoodDetails(string foodId)
+        {
+            Response response = _dal.GetFoodDetails(foodId);
+            return response;
+        }
+        [HttpGet]
+        [Route("getAllFoods")]
+        public Response GetAllFoods()
+        {
+            Response response = _dal.GetAllFoods();
+            return response;
+        }
+
+
     }
 }

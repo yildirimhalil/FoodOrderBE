@@ -1,303 +1,387 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Data.SqlClient;
-using System.Data;
+using Microsoft.Extensions.Configuration;
+using MongoDB.Bson;
+using MongoDB.Driver;
 
 namespace FoodOrderBE.Models
 {
     public class DAL
     {
-        public Response register(Users users, SqlConnection connection)
+        private readonly IMongoDatabase _database;
+
+        public DAL(IConfiguration configuration)
         {
+            var connectionString = configuration.GetConnectionString("FoodOrderCS");
+            var client = new MongoClient(connectionString);
+            _database = client.GetDatabase("FoodOrder");
+        }
+
+        public Response Register(Users user)
+        {
+            var collection = _database.GetCollection<Users>("Users");
             Response response = new Response();
-            SqlCommand cmd = new SqlCommand("sp_register", connection);
-            cmd.CommandType = CommandType.StoredProcedure;
-            cmd.Parameters.AddWithValue("@FirstName", users.FirstName);
-            cmd.Parameters.AddWithValue("@LastName", users.LastName);
-            cmd.Parameters.AddWithValue("@Password", users.Password);
-            cmd.Parameters.AddWithValue("@Email", users.Email);
-            cmd.Parameters.AddWithValue("@Fund", 0);
-            cmd.Parameters.AddWithValue("@Type", "Users");
-            cmd.Parameters.AddWithValue("@Type", "Pending");
-            connection.Open();
-            int i = cmd.ExecuteNonQuery();
-            connection.Close();
-            if(i > 0)
+
+            try
+            {
+                collection.InsertOne(user);
+                response.StatusCode = 200;
+                response.StatusMessage = "Kullanıcı başarılı bir şekilde kaydedildi";
+            }
+            catch (Exception ex)
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = $"Kullanıcı kaydı hatası: {ex.Message}";
+            }
+
+            return response;
+        }
+
+        public Response Login(Users user)
+        {
+            var collection = _database.GetCollection<Users>("Users");
+            Response response = new Response();
+
+            var filter = Builders<Users>.Filter.Eq("Email", user.Email) & Builders<Users>.Filter.Eq("Password", user.Password);
+            var result = collection.Find(filter).FirstOrDefault();
+
+            if (result != null)
             {
                 response.StatusCode = 200;
-                response.StatusMessage = "User registered successfully";
+                response.StatusMessage = "Kullanıcı doğrulandı";
+                response.User = result;
             }
             else
             {
                 response.StatusCode = 100;
-                response.StatusMessage = "User registration failed";
+                response.StatusMessage = "Kullanıcı doğrulanamadı";
+                response.User = null;
             }
+
             return response;
         }
 
-        public Response login(Users users, SqlConnection connection)
+        public Response ViewUser(Users user)
         {
-            SqlDataAdapter da = new SqlDataAdapter("sp_login", connection);
-            da.SelectCommand.CommandType = CommandType.StoredProcedure;
-            da.SelectCommand.Parameters.AddWithValue("@Email", users.Email);
-            da.SelectCommand.Parameters.AddWithValue("@Password", users.Password);
-            DataTable dt = new DataTable();
-            da.Fill(dt);
+            var collection = _database.GetCollection<Users>("Users");
             Response response = new Response();
-            Users user = new Users(); 
-            if(dt.Rows.Count > 0)
-            {
-                user.ID = Convert.ToInt32(dt.Rows[0]["Id"]);
-                user.FirstName = Convert.ToString(dt.Rows[0]["FirstName"]);
-                user.LastName = Convert.ToString(dt.Rows[0]["LastName"]);
-                user.Email = Convert.ToString(dt.Rows[0]["Email"]);
-                user.Type = Convert.ToString(dt.Rows[0]["Type"]);
-                response.StatusCode = 200;
-                response.StatusMessage = "User is valid";
-                response.user = user;
-            }  
-            else
-            {
-                response.StatusCode = 100;
-                response.StatusMessage = "User is invalid";
-                response.user = null;
-            }
-            return response;
-        }
 
-        public Response viewUser(Users users, SqlConnection connection)
-        {
-            SqlDataAdapter da = new SqlDataAdapter("p_viewUser", connection);
-            da.SelectCommand.CommandType= CommandType.StoredProcedure;
-            da.SelectCommand.Parameters.AddWithValue("@ID", users.ID);
-            DataTable dt = new DataTable();
-            da.Fill(dt);
-            Response response = new Response();
-            Users user = new Users();
+            var filter = Builders<Users>.Filter.Eq("_id", user.Id);
+            var result = collection.Find(filter).FirstOrDefault();
 
-            if (dt.Rows.Count>0)
+            if (result != null)
             {
-                user.ID = Convert.ToInt32(dt.Rows[0]["Id"]);
-                user.FirstName = Convert.ToString(dt.Rows[0]["FirstName"]);
-                user.LastName = Convert.ToString(dt.Rows[0]["LastName"]);
-                user.Email = Convert.ToString(dt.Rows[0]["Email"]);
-                user.Type = Convert.ToString(dt.Rows[0]["Type"]);
-                user.Fund = Convert.ToDecimal(dt.Rows[0]["Fund"]);
-                user.CreatedOn = Convert.ToDateTime(dt.Rows[0]["CreatedOn"]);
-                user.Password = Convert.ToString(dt.Rows[0]["Password"]);
                 response.StatusCode = 200;
-                response.StatusMessage = "User exists"; 
+                response.StatusMessage = "Kullanıcı mevcut";
+                response.User = result;
             }
             else
             {
                 response.StatusCode = 100;
-                response.StatusMessage = "User does not exist";
-                response.user = user;
+                response.StatusMessage = "Kullanıcı mevcut değil";
+                response.User = null;
             }
+
             return response;
         }
 
-        public Response updateProfile(Users users, SqlConnection connection)
+        public Response UpdateProfile(Users user)
         {
+            var collection = _database.GetCollection<Users>("Users");
             Response response = new Response();
-            SqlCommand cmd = new SqlCommand("sp_updateProfile", connection);
-            cmd.CommandType = CommandType.StoredProcedure;
-            cmd.Parameters.AddWithValue("@FirstName", users.FirstName);
-            cmd.Parameters.AddWithValue("@LastName", users.LastName);
-            cmd.Parameters.AddWithValue("@Password", users.Password);
-            cmd.Parameters.AddWithValue("@Email", users.Email);
-            connection.Open();
-            int i = cmd.ExecuteNonQuery();
-            connection.Close();
-            if(i > 0)
+
+            var filter = Builders<Users>.Filter.Eq("_id", user.Id);
+            var update = Builders<Users>.Update
+                .Set("FirstName", user.FirstName)
+                .Set("LastName", user.LastName)
+                .Set("Password", user.Password)
+                .Set("Email", user.Email);
+
+            var result = collection.UpdateOne(filter, update);
+
+            if (result.ModifiedCount > 0)
             {
                 response.StatusCode = 200;
-                response.StatusMessage = "Record update successfully";
+                response.StatusMessage = "Kullanıcı profili güncelleme başarılı";
             }
             else
             {
                 response.StatusCode = 100;
-                response.StatusMessage = "Some error occured. Try after sometime";
+                response.StatusMessage = "Kullanıcı profili güncelleme başarılamadı!";
             }
+
             return response;
         }
 
-        public Response addToCart(Cart cart, SqlConnection connection)
+        public Response AddToCart(Cart cart)
         {
+            var collection = _database.GetCollection<Cart>("Carts");
             Response response = new Response();
-            SqlCommand cmd = new SqlCommand("sp_AddToCart", connection);
-            cmd.CommandType = CommandType.StoredProcedure;
-            cmd.Parameters.AddWithValue("@UserId", cart.UserId);
-            cmd.Parameters.AddWithValue("@UnitPrice", cart.UnitPrice);
-            cmd.Parameters.AddWithValue("@Discount", cart.Discount);
-            cmd.Parameters.AddWithValue("@Quantity", cart.Quantity);
-            cmd.Parameters.AddWithValue("@TotalPrice", cart.TotalPrice);
-            cmd.Parameters.AddWithValue("@FoodID", cart.FoodID);
-            connection.Open ();
-            int i = cmd.ExecuteNonQuery();
-            connection.Close ();
-            if(i > 0)
+
+            try
             {
+                collection.InsertOne(cart);
                 response.StatusCode = 200;
-                response.StatusMessage = "Item added succesfully";
+                response.StatusMessage = "Ürün sepete başarıyla eklendi";
             }
-            else
+            catch (Exception ex)
             {
                 response.StatusCode = 100;
-                response.StatusMessage = "Item could not be added";
+                response.StatusMessage = $"Ürün sepete eklenemedi: {ex.Message}";
             }
+
             return response;
         }
 
-        public Response placeOrder(Users users, SqlConnection connection)
+        public Response PlaceOrder(Users user)
         {
-            Response response = new Response ();
-            SqlCommand cmd = new SqlCommand("sp_PlaceOrder", connection);
-            cmd.CommandType= CommandType.StoredProcedure;
-            cmd.Parameters.AddWithValue("@ID",users.ID);
-            connection.Open();
-            int i = cmd.ExecuteNonQuery();
-            connection.Close();
-            if (i > 0)
-            {
-                response.StatusCode = 200;
-                response.StatusMessage = "Order has been placed successfully";
-            }
-            else
-            {
-                response.StatusCode = 100;
-                response.StatusMessage = "Order could not be placed";
-            }
-            return response;
-        }
-
-        public Response orderList(Users users, SqlConnection connection)
-        {
+            var collection = _database.GetCollection<Orders>("Orders");
             Response response = new Response();
-            List<Orders> listOrder = new List<Orders>();
-            SqlDataAdapter da = new SqlDataAdapter("sp_OrderList", connection);
-            da.SelectCommand.CommandType = CommandType.StoredProcedure;
-            da.SelectCommand.Parameters.AddWithValue("@Type", users.Type);
-            da.SelectCommand.Parameters.AddWithValue("@ID", users.ID);
-            DataTable dt = new DataTable();
-            da.Fill(dt);
-            if (dt.Rows.Count > 0)
+
+            try
             {
-                for (int i = 0; i < dt.Rows.Count; i++)
+                var order = new Orders
                 {
-                    Orders order = new Orders();
-                    order.ID = Convert.ToInt32(dt.Rows[i]["ID"]);
-                    order.OrderNo = Convert.ToString(dt.Rows[i]["OrderNo"]);
-                    order.OrderTotal = Convert.ToDecimal(dt.Rows[i]["OrderTotal"]);
-                    order.OrderStatus = Convert.ToString(dt.Rows[i]["OrderStatus"]);
-                    listOrder.Add(order);
-                }
-                if (listOrder.Count > 0)
+                    UserId = user.Id.ToString(),
+                    OrderNo = GenerateOrderNumber(),
+                    OrderTotal = CalculateOrderTotal(user.Id.ToString()),
+                    OrderStatus = "Pending"
+                };
+
+                collection.InsertOne(order);
+                response.StatusCode = 200;
+                response.StatusMessage = "Sipariş başarıyla verildi";
+            }
+            catch (Exception ex)
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = $"Sipariş verilemedi: {ex.Message}";
+            }
+
+            return response;
+        }
+
+        private decimal CalculateOrderTotal(string v)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Response OrderList(Users user)
+        {
+            var orderCollection = _database.GetCollection<Orders>("Orders");
+            var orderItemsCollection = _database.GetCollection<OrderItems>("OrderItems");
+
+            Response response = new Response();
+            List<Orders> orderList = new List<Orders>();
+
+            var filter = Builders<Orders>.Filter.Eq("UserId", user.Id);
+            var orders = orderCollection.Find(filter).ToList();
+
+            foreach (var order in orders)
+            {
+                var orderItemsFilter = Builders<OrderItems>.Filter.Eq("OrderID", order.Id);
+                var orderItemList = orderItemsCollection.Find(orderItemsFilter).ToList();
+
+                orderList.Add(new Orders
                 {
+                    Id = order.Id,
+                    OrderNo = order.OrderNo,
+                    OrderTotal = order.OrderTotal,
+                    OrderStatus = order.OrderStatus,
+                    OrderItems = orderItemList
+                });
+            }
+
+            if (orderList.Count > 0)
+            {
+                response.StatusCode = 200;
+                response.StatusMessage = "Sipariş detayları getirildi";
+                response.ListOrders = orderList;
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "Sipariş detayları mevcut değil";
+                response.ListOrders = null;
+            }
+
+            return response;
+        }
+        public Response UserList()
+        {
+            var collection = _database.GetCollection<Users>("Users");
+            Response response = new Response();
+
+            try
+            {
+                var userList = collection.Find(_ => true).ToList();
+                response.StatusCode = 200;
+                response.StatusMessage = "Kullanıcı listesi başarıyla getirildi";
+                response.ListUsers = userList;
+            }
+            catch (Exception ex)
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = $"Kullanıcı listesi getirilemedi: {ex.Message}";
+                response.ListUsers = null;
+            }
+
+            return response;
+        }
+
+        public Response AddUpdateFood(Foods food)
+        {
+            var collection = _database.GetCollection<Foods>("Foods");
+            Response response = new Response();
+
+            try
+            {
+                // Aynı isme sahip yemek kontrolü
+                var existingFood = collection.Find(f => f.Name == food.Name).FirstOrDefault();
+
+                if (existingFood == null)
+                {
+                    // Eğer aynı isme sahip bir yemek yoksa, yeni bir yemek ekler
+                    collection.InsertOne(food);
                     response.StatusCode = 200;
-                    response.StatusMessage = "Order details fatched";
-                    response.listOrders = listOrder;
+                    response.StatusMessage = "Yiyecek başarıyla eklendi";
                 }
                 else
                 {
+                    // Aynı isme sahip bir yemek varsa, güncelleme yapar
+                    var filter = Builders<Foods>.Filter.Eq("_id", existingFood.Id);
+                    var update = Builders<Foods>.Update
+                        .Set(f => f.Name, food.Name)
+                        .Set(f => f.Manufacturer, food.Manufacturer)
+                        .Set(f => f.UnitPrice, food.UnitPrice)
+                        .Set(f => f.Discount, food.Discount)
+                        .Set(f => f.Quantity, food.Quantity)
+                        .Set(f => f.ExpDate, food.ExpDate)
+                        .Set(f => f.ImageUrl, food.ImageUrl)
+                        .Set(f => f.Status, food.Status)
+                        .Set(f => f.Type, food.Type);
 
-                    response.StatusCode = 100;
-                    response.StatusMessage = "Order details are not available";
-                    response.listOrders = null;
+                    var result = collection.UpdateOne(filter, update);
 
+                    if (result.ModifiedCount > 0)
+                    {
+                        response.StatusCode = 200;
+                        response.StatusMessage = "Yiyecek güncelleme başarılı";
+                    }
+                    else
+                    {
+                        response.StatusCode = 100;
+                        response.StatusMessage = "Yiyecek güncellenemedi";
+                    }
                 }
             }
-            else
+            catch (Exception ex)
             {
-
                 response.StatusCode = 100;
-                response.StatusMessage = "Order details are not available";
-                response.listOrders = null;
-
+                response.StatusMessage = $"Yiyecek ekleme/güncelleme başarısız: {ex.Message}";
             }
+
             return response;
         }
 
-        public Response userList(SqlConnection connection)
+        public Response GetFoodDetails(string foodId)
         {
-            Response response = new Response ();
-            List<Users> listUsers = new List<Users> ();
-            SqlDataAdapter da = new SqlDataAdapter("sp_UserList", connection);
-            da.SelectCommand.CommandType = CommandType.StoredProcedure;
-            DataTable dt = new DataTable();
-            da.Fill(dt);
-            if (dt.Rows.Count > 0)
+            var collection = _database.GetCollection<Foods>("Foods");
+            Response response = new Response();
+
+            try
             {
-                for (int i = 0; i < dt.Rows.Count; i++)
-                {
-                    Users user = new Users();
-                    user.ID = Convert.ToInt32(dt.Rows[i]["ID"]);
-                    user.FirstName = Convert.ToString(dt.Rows[i]["FirstName"]);
-                    user.LastName = Convert.ToString(dt.Rows[i]["LastName"]);
-                    user.Password = Convert.ToString(dt.Rows[i]["Password"]);
-                    user.Email= Convert.ToString(dt.Rows[i]["Email"]);
-                    user.Fund = Convert.ToDecimal(dt.Rows[i]["Fund"]);
-                    user.Status = Convert.ToInt32(dt.Rows[i]["Status"]);
-                    user.CreatedOn = Convert.ToDateTime(dt.Rows[i]["CreatedOn"]);
-                    listUsers.Add(user);
-                }
-                if(listUsers.Count > 0)
+                var filter = Builders<Foods>.Filter.Eq("Id", ObjectId.Parse(foodId));
+                var food = collection.Find(filter).FirstOrDefault();
+
+                if (food != null)
                 {
                     response.StatusCode = 200;
-                    response.StatusMessage = "User details fatched";
-                    response.listUsers = listUsers;
+                    response.StatusMessage = "Yiyecek detayları başarıyla getirildi";
+                    response.Food = food;
                 }
                 else
                 {
-                
                     response.StatusCode = 100;
-                    response.StatusMessage = "Users details are not available";
-                    response.listUsers = null;
-                  
+                    response.StatusMessage = "Yiyecek detayları mevcut değil";
+                    response.Food = null;
                 }
             }
-            else
+            catch (Exception ex)
             {
-
                 response.StatusCode = 100;
-                response.StatusMessage = "Order details are not available";
-                response.listOrders = null;
-
+                response.StatusMessage = $"Yiyecek detayları getirilemedi: {ex.Message}";
+                response.Food = null;
             }
+
             return response;
         }
 
-        public Response addUpdateFood(Foods foods, SqlConnection connection)
+        public Response DeleteFood(ObjectId foodId)
         {
+            var collection = _database.GetCollection<Foods>("Foods");
             Response response = new Response();
-            SqlCommand cmd = new SqlCommand("sp_AddUpdateFood", connection);
-            cmd.CommandType = CommandType.StoredProcedure;
-            cmd.Parameters.AddWithValue("@Name", foods.Name);
-            cmd.Parameters.AddWithValue("@Manufacturer", foods.Manufacturer);
-            cmd.Parameters.AddWithValue("@UnitPrice", foods.UnitPrice);
-            cmd.Parameters.AddWithValue("@Discount", foods.Discount);
-            cmd.Parameters.AddWithValue("@Quantity", foods.Quantity);
-            cmd.Parameters.AddWithValue("@ExpDate", foods.ExpDate);
-            cmd.Parameters.AddWithValue("@ImageUrl", foods.ImageUrl);
-            cmd.Parameters.AddWithValue("@Status", foods.Status);
-            cmd.Parameters.AddWithValue("@Type", foods.Type);
-            connection.Open();
-            int i = cmd.ExecuteNonQuery();
-            connection.Close();
-            if (i > 0)
+
+            try
             {
-                response.StatusCode = 200;
-                response.StatusMessage = "Food inserted successfully";
+                var filter = Builders<Foods>.Filter.Eq("_id", foodId);
+                var result = collection.DeleteOne(filter);
+
+                if (result.DeletedCount > 0)
+                {
+                    response.StatusCode = 200;
+                    response.StatusMessage = "Yiyecek silme başarılı";
+                }
+                else
+                {
+                    response.StatusCode = 100;
+                    response.StatusMessage = "Yiyecek silinemedi";
+                }
             }
-            else
+            catch (Exception ex)
             {
-                response.StatusCode = 100;
-                response.StatusMessage = "Food did not save. Try again.";
+                response.StatusCode = 500;
+                response.StatusMessage = $"Bir hata oluştu: {ex.Message}";
             }
 
             return response;
+        }
+
+
+        public Response GetAllFoods()
+        {
+            var collection = _database.GetCollection<Foods>("Foods");
+            Response response = new Response();
+
+            try
+            {
+                var yemekler = collection.Find(_ => true).ToList();
+                response.StatusCode = 200;
+                response.StatusMessage = "Yemek listesi başarıyla alındı";
+                response.ListFoods = yemekler;
+            }
+            catch (Exception ex)
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = $"Yemek listesi alınamadı: {ex.Message}";
+                response.ListFoods = null;
+            }
+
+            return response;
+        }
+
+
+        // Yardımcı metotlar
+        private string GenerateOrderNumber()
+        {
+
+            return Guid.NewGuid().ToString();
+        }
+
+        private decimal CalculateOrderTotal(ObjectId userId)
+        {
+
+            return 100.00M;
         }
     }
 }

@@ -1,12 +1,6 @@
-﻿using FoodOrderBE.Models;
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Linq;
-using System.Threading.Tasks;
-
+using FoodOrderBE.Models;
 
 namespace FoodOrderBE.Controllers
 {
@@ -14,52 +8,43 @@ namespace FoodOrderBE.Controllers
     [ApiController]
     public class UsersController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
-        public UsersController(IConfiguration configuration)
+        private readonly DAL _dal;
+
+        public UsersController(DAL dal)
         {
-            _configuration = configuration;
+            _dal = dal;
         }
 
         [HttpPost]
         [Route("registration")]
-        public Response register(Users users)
+        public Response Register(Users user)
         {
-            Response response = new Response();
-            DAL dal= new DAL();
-            SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("FoodOrderCS").ToString());
-            response = dal.register(users, connection);
+            Response response = _dal.Register(user);
             return response;
         }
 
         [HttpPost]
         [Route("login")]
-        public Response login(Users users)
+        public Response Login(Users user)
         {
-            DAL dal= new DAL();
-            SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("FoodOrderCS").ToString());
-            Response response = dal.login(users, connection);
+            Response response = _dal.Login(user);
             return response;
         }
 
         [HttpPost]
         [Route("viewUser")]
-        public Response viewUser(Users users)
+        public Response ViewUser(Users user)
         {
-            DAL dal = new DAL();
-            SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("FoodOrderCS").ToString());
-            Response response = dal.viewUser(users, connection);
+            Response response = _dal.ViewUser(user);
             return response;
         }
 
         [HttpPost]
         [Route("updateProfile")]
-        public Response updateProfile(Users users)
+        public Response UpdateProfile(Users user)
         {
-            DAL dal= new DAL();
-            SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("FoodOrderCS").ToString());
-            Response response = dal.updateProfile(users, connection);
+            Response response = _dal.UpdateProfile(user);
             return response;
         }
-
     }
 }

@@ -1,13 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson;
+using System;
 
 namespace FoodOrderBE.Models
 {
     public class Foods
     {
-        public int ID { get; set; }
+        [BsonId]
+        [BsonRepresentation(BsonType.ObjectId)]
+        public ObjectId Id { get; set; }
+
         public string Name { get; set; }
         public string Manufacturer { get; set; }
         public decimal UnitPrice { get; set; }
@@ -17,6 +19,5 @@ namespace FoodOrderBE.Models
         public string ImageUrl { get; set; }
         public int Status { get; set; }
         public string Type { get; set; }
-
     }
 }
