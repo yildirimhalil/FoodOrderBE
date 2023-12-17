@@ -14,6 +14,18 @@ namespace FoodOrderBE
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+            // ConfigureServices metodunda
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowSpecificOrigin",
+                    builder => builder.WithOrigins("http://localhost:5173")
+                                      .AllowAnyMethod()
+                                      .AllowAnyHeader());
+            });
+
+            // Configure metodunda
+            
+
 
             var app = builder.Build();
 
@@ -24,6 +36,7 @@ namespace FoodOrderBE
                 app.UseSwaggerUI();
             }
 
+            app.UseCors("AllowSpecificOrigin");
             app.UseHttpsRedirection();
 
             app.UseAuthorization();
